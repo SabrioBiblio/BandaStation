@@ -16,7 +16,9 @@
 	var/datum/action/cooldown/spell/smoke/lesser/loot_goblin/smoke_action
 	var/datum/action/cooldown/loot_goblin_trap/trap_action
 	var/datum/objective/loot_goblin_tier/tier_objective
-	var/list/chosen_perks = new /list(LOOT_GOBLIN_PERK_TIERS)
+	var/list/chosen_perks = new /list(LOOT_GOBLIN_COLLECTION_PERK_SLOT)
+	var/collection_complete = FALSE
+	var/collection_announced = FALSE
 	var/list/applied_perks = list()
 	var/static/list/perk_info = list(
 		LOOT_GOBLIN_PERK_SPEED = list("name" = "Сильные ноги", "desc" = "Ваши ноги сами знают, куда вас нести.", "tier" = 2),
@@ -27,7 +29,7 @@
 		LOOT_GOBLIN_PERK_RECALL = list("name" = "Возврат в логово", "desc" = "В опасной ситуации вы всегда знаете дорогу к своему логову.", "tier" = 3),
 		LOOT_GOBLIN_PERK_HEARING = list("name" = "Чуткий слух", "desc" = "Вы слышите каждый шорох.", "tier" = 3),
 		LOOT_GOBLIN_PERK_SMOKE = list("name" = "Пыль в глаза", "desc" = "Горсть пыли в лицо — и вас уже и след простыл.", "tier" = 4),
-		LOOT_GOBLIN_PERK_SHADOW = list("name" = "Покров тьмы", "desc" = "Замрите в темноте — и вы постепенно сольётесь с ней, оставшись едва заметным. Любое движение, удар или свет выдают вас.", "tier" = 3),
+		LOOT_GOBLIN_PERK_SHADOW = list("name" = "Покров тьмы", "desc" = "Замрите в темноте — и вы постепенно сольётесь с ней, оставшись едва заметным. Свет вас уже не выдаст — только движение, удар или полученный урон.", "tier" = 3),
 		LOOT_GOBLIN_PERK_TRAP = list("name" = "Гоблинский капкан", "desc" = "Незаметный капкан валит жертву с ног на 5 секунд, лишает сил и не даёт вымолвить ни слова 15 секунд. Нужно 5 листов железа, перезарядка 1 минута, не больше 3 капканов сразу.", "tier" = 4),
 	)
 	var/tier = 0
@@ -343,6 +345,10 @@
 		influence = min(influence + sacrifices_done * LOOT_GOBLIN_SACRIFICE_INFLUENCE, LOOT_GOBLIN_MAX_INFLUENCE)
 	if(admin_tier)
 		influence = min((admin_tier - 1) * LOOT_GOBLIN_TIER_TWO_INFLUENCE, LOOT_GOBLIN_MAX_INFLUENCE)
+	var/now_complete = figures_in_lair >= LOOT_GOBLIN_MAX_FIGURES
+	if(now_complete != collection_complete)
+		collection_complete = now_complete
+		on_collection_changed()
 	var/has_aura = influence >= LOOT_GOBLIN_AURA_INFLUENCE
 	if(has_aura != aura_shown)
 		aura_shown = has_aura
@@ -446,16 +452,40 @@
 			return pick(turfs)
 	return null
 
+/datum/antagonist/loot_goblin/proc/on_collection_changed()
+	var/mob/living/goblin = owner?.current
+	if(collection_complete)
+		if(!collection_announced)
+			collection_announced = TRUE
+			priority_announce("Лут гоблин собрал полную коллекцию фигурок экипажа! Остановите его любой ценой!", "Внимание")
+		if(goblin)
+			to_chat(goblin, span_boldnotice("Полная коллекция фигурок! Вам доступно бонусное умение в меню гоблина."))
+	else if(goblin)
+		to_chat(goblin, span_bolddanger("Коллекцию фигурок разорили — бонусное умение больше не действует."))
+	update_perks(goblin)
+	update_static_data_for_all_viewers()
+
+/datum/antagonist/loot_goblin/proc/is_perk_slot_open(perk_slot)
+	if(perk_slot == LOOT_GOBLIN_COLLECTION_PERK_SLOT)
+		return collection_complete
+	return tier >= perk_slot
+
+/datum/antagonist/loot_goblin/proc/get_perk_slot_label(perk_slot)
+	if(perk_slot == LOOT_GOBLIN_COLLECTION_PERK_SLOT)
+		return "Коллекция"
+	return "Тир [perk_slot]"
+
 /datum/antagonist/loot_goblin/proc/get_pending_perk_tier()
-	for(var/perk_tier in LOOT_GOBLIN_FIRST_PERK_TIER to min(tier, LOOT_GOBLIN_PERK_TIERS))
-		if(!chosen_perks[perk_tier])
-			return perk_tier
+	for(var/perk_slot in LOOT_GOBLIN_FIRST_PERK_TIER to LOOT_GOBLIN_COLLECTION_PERK_SLOT)
+		if(is_perk_slot_open(perk_slot) && !chosen_perks[perk_slot])
+			return perk_slot
 	return null
 
-/datum/antagonist/loot_goblin/proc/get_perk_options(perk_tier)
+/datum/antagonist/loot_goblin/proc/get_perk_options(perk_slot)
+	var/max_perk_tier = perk_slot == LOOT_GOBLIN_COLLECTION_PERK_SLOT ? tier : perk_slot
 	var/list/options = list()
 	for(var/perk in perk_info)
-		if(perk_info[perk]["tier"] <= perk_tier && !(perk in chosen_perks))
+		if(perk_info[perk]["tier"] <= max_perk_tier && !(perk in chosen_perks))
 			options += perk
 	return options
 
@@ -481,9 +511,9 @@
 	else
 		goblin.remove_movespeed_modifier(/datum/movespeed_modifier/loot_goblin_tier_three)
 	var/list/active_perks = list()
-	for(var/perk_tier in LOOT_GOBLIN_FIRST_PERK_TIER to LOOT_GOBLIN_PERK_TIERS)
-		if(chosen_perks[perk_tier] && tier >= perk_tier)
-			active_perks += chosen_perks[perk_tier]
+	for(var/perk_slot in LOOT_GOBLIN_FIRST_PERK_TIER to LOOT_GOBLIN_COLLECTION_PERK_SLOT)
+		if(chosen_perks[perk_slot] && is_perk_slot_open(perk_slot))
+			active_perks += chosen_perks[perk_slot]
 	for(var/perk in applied_perks.Copy())
 		if(!(perk in active_perks))
 			remove_perk(goblin, perk)
@@ -581,16 +611,17 @@
 	data["lair_loot"] = lair_loot
 	var/pending_tier = get_pending_perk_tier()
 	data["pending_perk_tier"] = pending_tier
+	data["pending_perk_label"] = pending_tier ? get_perk_slot_label(pending_tier) : null
 	var/list/options = list()
 	if(pending_tier)
 		for(var/perk in get_perk_options(pending_tier))
 			options += list(list("id" = perk, "name" = perk_info[perk]["name"], "desc" = perk_info[perk]["desc"], "tier" = perk_info[perk]["tier"]))
 	data["perk_options"] = options
 	var/list/perks = list()
-	for(var/perk_tier in LOOT_GOBLIN_FIRST_PERK_TIER to LOOT_GOBLIN_PERK_TIERS)
-		var/perk = chosen_perks[perk_tier]
+	for(var/perk_slot in LOOT_GOBLIN_FIRST_PERK_TIER to LOOT_GOBLIN_COLLECTION_PERK_SLOT)
+		var/perk = chosen_perks[perk_slot]
 		if(perk)
-			perks += list(list("id" = perk, "tier" = perk_tier, "name" = perk_info[perk]["name"], "desc" = perk_info[perk]["desc"], "active" = tier >= perk_tier))
+			perks += list(list("id" = perk, "tier" = perk_slot, "label" = get_perk_slot_label(perk_slot), "name" = perk_info[perk]["name"], "desc" = perk_info[perk]["desc"], "active" = is_perk_slot_open(perk_slot)))
 	data["perks"] = perks
 	return data
 
@@ -625,16 +656,16 @@
 	return goblin?.tier == LOOT_GOBLIN_TIER_ESCAPE && considered_escaped(owner)
 
 /datum/movespeed_modifier/loot_goblin
-	multiplicative_slowdown = -0.25
+	multiplicative_slowdown = -0.2
 
 /datum/movespeed_modifier/loot_goblin_base
-	multiplicative_slowdown = -0.1
+	multiplicative_slowdown = -0.05
 
 /datum/movespeed_modifier/loot_goblin_tier_two
-	multiplicative_slowdown = -0.1
+	multiplicative_slowdown = -0.05
 
 /datum/movespeed_modifier/loot_goblin_tier_three
-	multiplicative_slowdown = -0.05
+	multiplicative_slowdown = -0.025
 
 /datum/status_effect/loot_goblin_regen
 	id = "loot_goblin_regen"

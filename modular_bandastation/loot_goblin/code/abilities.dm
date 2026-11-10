@@ -153,8 +153,12 @@
 	if(owner.has_status_effect(/datum/status_effect/loot_goblin_invisibility))
 		return
 	var/turf/owner_turf = get_turf(owner)
-	if(owner.stat == DEAD || !owner_turf || owner_turf.get_lumcount() > SHADOW_SPECIES_LIGHT_THRESHOLD)
+	if(owner.stat == DEAD || !owner_turf)
 		reveal()
+		return
+	if(owner_turf.get_lumcount() > SHADOW_SPECIES_LIGHT_THRESHOLD)
+		if(!faded)
+			still_time = 0
 		return
 	if(!faded)
 		base_alpha = owner.alpha

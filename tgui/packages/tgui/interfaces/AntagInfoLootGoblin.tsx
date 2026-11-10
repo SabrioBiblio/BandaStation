@@ -29,6 +29,7 @@ type Recipe = {
 type ChosenPerk = {
   id: string;
   tier: number;
+  label: string;
   name: string;
   desc: string;
   active: boolean;
@@ -44,6 +45,7 @@ type Data = {
   has_lair: BooleanLike;
   lair_loot: LootEntry[];
   pending_perk_tier: number | null;
+  pending_perk_label: string | null;
   perk_options: PerkOption[];
   perks: ChosenPerk[];
   recipes: Recipe[];
@@ -164,13 +166,13 @@ type PerkCardProps = {
   id: string;
   name: string;
   desc: string;
-  tier: number;
+  label: string;
   inactive?: boolean;
   onPick?: () => void;
 };
 
 function PerkCard(props: PerkCardProps) {
-  const { id, name, desc, tier, inactive, onPick } = props;
+  const { id, name, desc, label, inactive, onPick } = props;
   const look = PERK_LOOK[id] || { icon: 'star', color: '#5b4a1e' };
 
   return (
@@ -196,7 +198,7 @@ function PerkCard(props: PerkCardProps) {
         <span className="LootGoblin__card-desc">{desc}</span>
         <span className="LootGoblin__tag">
           <Icon name="coins" />
-          Тир {tier}
+          {label}
           {inactive && ' — неактивно'}
         </span>
       </div>
@@ -214,13 +216,14 @@ function PerkCard(props: PerkCardProps) {
 
 function PerksTab() {
   const { act, data } = useBackend<Data>();
-  const { pending_perk_tier, perk_options, perks } = data;
+  const { pending_perk_tier, pending_perk_label, perk_options, perks } =
+    data;
 
   return (
     <>
       {!!pending_perk_tier && (
         <div className="LootGoblin__notice">
-          Доступен выбор умения тира {pending_perk_tier}
+          Доступен выбор умения: {pending_perk_label}
         </div>
       )}
       {!!pending_perk_tier &&
@@ -230,7 +233,7 @@ function PerksTab() {
             id={option.id}
             name={option.name}
             desc={option.desc}
-            tier={option.tier}
+            label={`Тир ${option.tier}`}
             onPick={() => act('choose_perk', { perk: option.id })}
           />
         ))}
@@ -243,7 +246,7 @@ function PerksTab() {
               id={perk.id}
               name={perk.name}
               desc={perk.desc}
-              tier={perk.tier}
+              label={perk.label}
               inactive={!perk.active}
             />
           ))

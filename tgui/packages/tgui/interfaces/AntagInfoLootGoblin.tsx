@@ -61,6 +61,7 @@ const PERK_LOOK: Record<string, { icon: string; color: string }> = {
   hearing: { icon: 'shoe-prints', color: '#4a5a2a' },
   steady: { icon: 'anchor', color: '#6b5a2e' },
   trap: { icon: 'link', color: '#5a3a2a' },
+  shadow: { icon: 'moon', color: '#2a2a4a' },
   smoke: { icon: 'smog', color: '#4f4f5c' },
 };
 

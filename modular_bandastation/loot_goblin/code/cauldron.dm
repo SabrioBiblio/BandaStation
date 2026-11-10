@@ -388,6 +388,7 @@ GLOBAL_LIST_INIT(loot_goblin_ingredient_names, list(
 /datum/status_effect/loot_goblin_invisibility/on_apply()
 	old_alpha = owner.alpha
 	animate(owner, alpha = LOOT_GOBLIN_INVISIBILITY_ALPHA, time = 1 SECONDS)
+	owner.update_appearance(UPDATE_OVERLAYS)
 	RegisterSignals(owner, list(COMSIG_MOB_ITEM_ATTACK, COMSIG_LIVING_UNARMED_ATTACK, COMSIG_MOB_AFTER_APPLY_DAMAGE), PROC_REF(break_invisibility))
 	to_chat(owner, span_notice("Вы растворяетесь в воздухе."))
 	return TRUE
@@ -395,6 +396,7 @@ GLOBAL_LIST_INIT(loot_goblin_ingredient_names, list(
 /datum/status_effect/loot_goblin_invisibility/on_remove()
 	UnregisterSignal(owner, list(COMSIG_MOB_ITEM_ATTACK, COMSIG_LIVING_UNARMED_ATTACK, COMSIG_MOB_AFTER_APPLY_DAMAGE))
 	animate(owner, alpha = old_alpha, time = 0.5 SECONDS)
+	owner.update_appearance(UPDATE_OVERLAYS)
 	to_chat(owner, span_warning("Вы снова видимы."))
 
 /datum/status_effect/loot_goblin_invisibility/proc/break_invisibility(datum/source)

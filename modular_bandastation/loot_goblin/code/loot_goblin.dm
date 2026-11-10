@@ -27,6 +27,7 @@
 		LOOT_GOBLIN_PERK_RECALL = list("name" = "Возврат в логово", "desc" = "В опасной ситуации вы всегда знаете дорогу к своему логову.", "tier" = 3),
 		LOOT_GOBLIN_PERK_HEARING = list("name" = "Чуткий слух", "desc" = "Вы слышите каждый шорох.", "tier" = 3),
 		LOOT_GOBLIN_PERK_SMOKE = list("name" = "Пыль в глаза", "desc" = "Горсть пыли в лицо — и вас уже и след простыл.", "tier" = 4),
+		LOOT_GOBLIN_PERK_SHADOW = list("name" = "Покров тьмы", "desc" = "Замрите в темноте — и вы постепенно сольётесь с ней, оставшись едва заметным. Любое движение, удар или свет выдают вас.", "tier" = 3),
 		LOOT_GOBLIN_PERK_TRAP = list("name" = "Гоблинский капкан", "desc" = "Незаметный капкан валит жертву с ног на 5 секунд, лишает сил и не даёт вымолвить ни слова 15 секунд. Нужно 5 листов железа, перезарядка 1 минута, не больше 3 капканов сразу.", "tier" = 4),
 	)
 	var/tier = 0
@@ -204,7 +205,9 @@
 	cauldron_action.Remove(goblin)
 	for(var/perk in applied_perks.Copy())
 		remove_perk(goblin, perk)
-	goblin.remove_movespeed_modifier(/datum/movespeed_modifier/loot_goblin_tier_bonus)
+	goblin.remove_movespeed_modifier(/datum/movespeed_modifier/loot_goblin_base)
+	goblin.remove_movespeed_modifier(/datum/movespeed_modifier/loot_goblin_tier_two)
+	goblin.remove_movespeed_modifier(/datum/movespeed_modifier/loot_goblin_tier_three)
 	var/obj/item/organ/brain/primate/monkey_brain = goblin.get_organ_slot(ORGAN_SLOT_BRAIN)
 	if(istype(monkey_brain))
 		for(var/datum/action/item_action/organ_action/toggle_trip/trip_button in monkey_brain.actions)
@@ -351,7 +354,7 @@
 	if(!aura_shown)
 		return
 	overlays += mutable_appearance('icons/mob/effects/loot_goblin_aura.dmi', "loot_goblin_aura")
-	overlays += emissive_appearance('icons/mob/effects/loot_goblin_aura.dmi', "loot_goblin_aura", source, alpha = 200)
+	overlays += emissive_appearance('icons/mob/effects/loot_goblin_aura.dmi', "loot_goblin_aura", source, alpha = round(200 * source.alpha / 255))
 
 /datum/antagonist/loot_goblin/proc/update_tier()
 	var/new_tier = 1
@@ -468,10 +471,15 @@
 /datum/antagonist/loot_goblin/proc/update_perks(mob/living/goblin)
 	if(!ishuman(goblin))
 		return
-	if(tier >= LOOT_GOBLIN_BONUS_SPEED_TIER)
-		goblin.add_movespeed_modifier(/datum/movespeed_modifier/loot_goblin_tier_bonus)
+	goblin.add_movespeed_modifier(/datum/movespeed_modifier/loot_goblin_base)
+	if(tier >= 2)
+		goblin.add_movespeed_modifier(/datum/movespeed_modifier/loot_goblin_tier_two)
 	else
-		goblin.remove_movespeed_modifier(/datum/movespeed_modifier/loot_goblin_tier_bonus)
+		goblin.remove_movespeed_modifier(/datum/movespeed_modifier/loot_goblin_tier_two)
+	if(tier >= 3)
+		goblin.add_movespeed_modifier(/datum/movespeed_modifier/loot_goblin_tier_three)
+	else
+		goblin.remove_movespeed_modifier(/datum/movespeed_modifier/loot_goblin_tier_three)
 	var/list/active_perks = list()
 	for(var/perk_tier in LOOT_GOBLIN_FIRST_PERK_TIER to LOOT_GOBLIN_PERK_TIERS)
 		if(chosen_perks[perk_tier] && tier >= perk_tier)
@@ -500,6 +508,8 @@
 			recall_action.Grant(goblin)
 		if(LOOT_GOBLIN_PERK_SMOKE)
 			smoke_action.Grant(goblin)
+		if(LOOT_GOBLIN_PERK_SHADOW)
+			goblin.apply_status_effect(/datum/status_effect/loot_goblin_shadow)
 		if(LOOT_GOBLIN_PERK_TRAP)
 			trap_action.Grant(goblin)
 		if(LOOT_GOBLIN_PERK_HEARING)
@@ -526,6 +536,8 @@
 			recall_action.Remove(goblin)
 		if(LOOT_GOBLIN_PERK_SMOKE)
 			smoke_action.Remove(goblin)
+		if(LOOT_GOBLIN_PERK_SHADOW)
+			goblin.remove_status_effect(/datum/status_effect/loot_goblin_shadow)
 		if(LOOT_GOBLIN_PERK_TRAP)
 			trap_action.Remove(goblin)
 		if(LOOT_GOBLIN_PERK_HEARING)
@@ -615,8 +627,14 @@
 /datum/movespeed_modifier/loot_goblin
 	multiplicative_slowdown = -0.25
 
-/datum/movespeed_modifier/loot_goblin_tier_bonus
+/datum/movespeed_modifier/loot_goblin_base
 	multiplicative_slowdown = -0.1
+
+/datum/movespeed_modifier/loot_goblin_tier_two
+	multiplicative_slowdown = -0.1
+
+/datum/movespeed_modifier/loot_goblin_tier_three
+	multiplicative_slowdown = -0.05
 
 /datum/status_effect/loot_goblin_regen
 	id = "loot_goblin_regen"

@@ -119,3 +119,50 @@
 		to_chat(user, span_warning("Вы скованы и не можете вернуться в логово!"))
 		return FALSE
 	return TRUE
+
+/datum/status_effect/loot_goblin_shadow
+	id = "loot_goblin_shadow"
+	status_type = STATUS_EFFECT_UNIQUE
+	duration = STATUS_EFFECT_PERMANENT
+	tick_interval = 0.4 SECONDS
+	alert_type = null
+	var/base_alpha = 255
+	var/still_time = 0
+	var/faded = FALSE
+
+/datum/status_effect/loot_goblin_shadow/on_apply()
+	base_alpha = owner.alpha
+	RegisterSignals(owner, list(COMSIG_MOVABLE_MOVED, COMSIG_MOB_ITEM_ATTACK, COMSIG_LIVING_UNARMED_ATTACK, COMSIG_MOB_AFTER_APPLY_DAMAGE), PROC_REF(reveal))
+	return TRUE
+
+/datum/status_effect/loot_goblin_shadow/on_remove()
+	UnregisterSignal(owner, list(COMSIG_MOVABLE_MOVED, COMSIG_MOB_ITEM_ATTACK, COMSIG_LIVING_UNARMED_ATTACK, COMSIG_MOB_AFTER_APPLY_DAMAGE))
+	reveal()
+
+/datum/status_effect/loot_goblin_shadow/proc/reveal(datum/source)
+	SIGNAL_HANDLER
+	still_time = 0
+	if(!faded)
+		return
+	faded = FALSE
+	if(!owner.has_status_effect(/datum/status_effect/loot_goblin_invisibility))
+		animate(owner, alpha = base_alpha, time = 0.2 SECONDS)
+		owner.update_appearance(UPDATE_OVERLAYS)
+
+/datum/status_effect/loot_goblin_shadow/tick(seconds_between_ticks)
+	if(owner.has_status_effect(/datum/status_effect/loot_goblin_invisibility))
+		return
+	var/turf/owner_turf = get_turf(owner)
+	if(owner.stat == DEAD || !owner_turf || owner_turf.get_lumcount() > SHADOW_SPECIES_LIGHT_THRESHOLD)
+		reveal()
+		return
+	if(!faded)
+		base_alpha = owner.alpha
+	still_time += seconds_between_ticks SECONDS
+	var/fade_progress = min(still_time / LOOT_GOBLIN_SHADOW_FADE_TIME, 1)
+	faded = TRUE
+	var/new_alpha = round(base_alpha - (base_alpha - LOOT_GOBLIN_SHADOW_ALPHA) * fade_progress)
+	if(new_alpha == owner.alpha)
+		return
+	animate(owner, alpha = new_alpha, time = tick_interval)
+	owner.update_appearance(UPDATE_OVERLAYS)

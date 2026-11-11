@@ -15,6 +15,7 @@
 	var/datum/action/cooldown/loot_goblin_recall/recall_action
 	var/datum/action/cooldown/spell/smoke/lesser/loot_goblin/smoke_action
 	var/datum/action/cooldown/loot_goblin_trap/trap_action
+	var/datum/action/cooldown/spell/pointed/loot_goblin_snap/snap_action
 	var/datum/objective/loot_goblin_tier/tier_objective
 	var/list/chosen_perks = new /list(LOOT_GOBLIN_COLLECTION_PERK_SLOT)
 	var/collection_complete = FALSE
@@ -43,25 +44,15 @@
 		/datum/tts_seed/silero/gnomenapper,
 	)
 	var/datum/weakref/contract_target_ref
-	var/tier_one_loot
-	var/tier_two_loot
-	var/tier_one_closed_by
 	var/influence = 0
 	var/figures_in_lair = 0
 	var/list/lair_loot = list()
-	var/static/list/loot_types = list(
-		/datum/objective_item/steal/traitor/captain_spare,
-		/datum/objective_item/steal/caplaser,
-		/datum/objective_item/steal/capmedal,
-		/datum/objective_item/steal/jetpack,
-		/datum/objective_item/steal/handtele,
-		/datum/objective_item/steal/reactive,
-		/datum/objective_item/steal/magboots,
-		/datum/objective_item/steal/blueprints,
-		/datum/objective_item/steal/traitor/chief_engineer_belt,
-		/datum/objective_item/steal/hypo,
-		/datum/objective_item/steal/compactshotty,
-		/datum/objective_item/steal/ablative,
+	var/static/list/valuable_limits = list(
+		/obj/item/reagent_containers/cup/glass/flask/gold = 1,
+		/obj/item/stamp/head = 7,
+		/obj/item/gun/ballistic/shotgun/doublebarrel = 1,
+		/obj/item/melee/baton/telescopic = 5,
+		/obj/item/melee/baton = 1,
 	)
 	var/static/list/crew_figures
 	var/static/list/sacrifice_areas = list(
@@ -80,6 +71,7 @@
 	QDEL_NULL(recall_action)
 	QDEL_NULL(smoke_action)
 	QDEL_NULL(trap_action)
+	QDEL_NULL(snap_action)
 	tier_objective = null
 	return ..()
 
@@ -99,6 +91,7 @@
 	recall_action = new(src)
 	smoke_action = new(src)
 	trap_action = new(src)
+	snap_action = new(src)
 	forge_objectives()
 	. = ..()
 	var/datum/action/antag_info/info_button = info_button_ref?.resolve()
@@ -157,7 +150,7 @@
 	to_chat(owner.current, span_danger("Вы жаждете мести. Теперь сокровища гуманоидов на этой станции должны принадлежать вам. \
 		Верните своё: тащите ценности в логово, а кровь обидчиков принесите в жертву своей жадности."))
 	play_stinger()
-	to_chat(owner.current, span_notice("Обустройте логово на верхнем уровне станции и сносите туда добычу: ценные вещи отделов и коллекционные фигурки экипажа. \
+	to_chat(owner.current, span_notice("Обустройте логово на верхнем уровне станции и сносите туда добычу: печати глав отделов, телескопические дубинки, дубинку детектива, дробовик бармена, фляжку капитана и коллекционные фигурки экипажа. \
 		Чем богаче логово, тем сильнее ваша жадность и тем выше ваш тир. Вы пролезаете в вентиляцию даже с вещами. Экипаж уже знает о вашем появлении."))
 	owner.announce_objectives()
 
@@ -189,6 +182,7 @@
 	lair_action.Grant(goblin)
 	ritual_action.Grant(goblin)
 	cauldron_action.Grant(goblin)
+	snap_action.Grant(goblin)
 	for(var/datum/action/item_action/organ_action/toggle_trip/trip_button in goblin.actions)
 		trip_button.Remove(goblin)
 	update_perks(goblin)
@@ -205,6 +199,7 @@
 	lair_action.Remove(goblin)
 	ritual_action.Remove(goblin)
 	cauldron_action.Remove(goblin)
+	snap_action.Remove(goblin)
 	for(var/perk in applied_perks.Copy())
 		remove_perk(goblin, perk)
 	goblin.remove_movespeed_modifier(/datum/movespeed_modifier/loot_goblin_base)
@@ -216,46 +211,18 @@
 			trip_button.Grant(goblin)
 
 /datum/antagonist/loot_goblin/forge_objectives()
-	tier_one_loot = pick_loot(easy = TRUE)
-	tier_two_loot = pick_loot(easy = FALSE, exclude = tier_one_loot)
 	tier_objective = new
 	tier_objective.owner = owner
 	objectives += tier_objective
 	update_tier()
 
-/datum/antagonist/loot_goblin/proc/pick_loot(easy, exclude)
-	var/list/fitting = list()
-	var/list/fallback = list()
-	for(var/datum/objective_item/item as anything in GLOB.possible_items)
-		if(!(item.type in loot_types) || item.type == exclude)
-			continue
-		if(!item.valid_objective_for(list(owner)))
-			continue
-		fallback += item.type
-		if((item.difficulty <= LOOT_GOBLIN_EASY_LOOT_DIFFICULTY) == easy)
-			fitting += item.type
-	if(length(fitting))
-		return pick(fitting)
-	if(length(fallback))
-		return pick(fallback)
-	return null
-
-/datum/antagonist/loot_goblin/proc/get_loot_datum(loot_type)
-	if(!loot_type)
+/datum/antagonist/loot_goblin/proc/get_valuable_category(obj/item/thing)
+	if(istype(thing, /obj/item/melee/baton/telescopic/contractor_baton))
 		return null
-	for(var/datum/objective_item/item as anything in GLOB.possible_items)
-		if(item.type == loot_type)
-			return item
+	for(var/category in valuable_limits)
+		if(category == /obj/item/melee/baton ? thing.type == category : istype(thing, category))
+			return category
 	return null
-
-/datum/antagonist/loot_goblin/proc/get_loot_name(loot_type)
-	var/datum/objective_item/item = get_loot_datum(loot_type)
-	return item?.name
-
-/datum/antagonist/loot_goblin/proc/is_target_loot(datum/objective_item/item, obj/item/thing)
-	if(!item)
-		return FALSE
-	return (istype(thing, item.targetitem) || (thing.type in item.altitems)) && item.check_special_completion(thing)
 
 /datum/antagonist/loot_goblin/proc/is_crew_figure(obj/item/thing)
 	if(isnull(crew_figures))
@@ -301,46 +268,23 @@
 	lair_loot = list()
 	var/turf/lair_turf = get_turf(lair)
 	if(lair_turf)
-		var/datum/objective_item/first_loot = get_loot_datum(tier_one_loot)
-		var/datum/objective_item/second_loot = get_loot_datum(tier_two_loot)
-		var/obj/item/first_found
-		var/obj/item/second_found
 		var/list/figure_types = list()
+		var/list/valuable_counts = list()
+		var/loot_points = 0
 		for(var/obj/item/thing in lair_turf)
 			if(HAS_TRAIT(thing, TRAIT_ITEM_OBJECTIVE_BLOCKED))
 				continue
-			if(!first_found && is_target_loot(first_loot, thing))
-				first_found = thing
-			else if(!second_found && is_target_loot(second_loot, thing))
-				second_found = thing
+			var/category = get_valuable_category(thing)
+			if(category)
+				if(valuable_counts[category] >= valuable_limits[category])
+					continue
+				valuable_counts[category] += 1
+				loot_points += LOOT_GOBLIN_LOOT_INFLUENCE
+				lair_loot += list(list("name" = thing.declent_ru(NOMINATIVE), "value" = LOOT_GOBLIN_LOOT_INFLUENCE))
 			else if(is_crew_figure(thing) && length(figure_types) < LOOT_GOBLIN_MAX_FIGURES)
 				figure_types |= thing.type
 		figures_in_lair = length(figure_types)
-		var/figure_points = figures_in_lair * LOOT_GOBLIN_FIGURE_INFLUENCE
-		if(tier_one_closed_by == LOOT_GOBLIN_CLOSED_BY_LOOT && !first_found)
-			tier_one_closed_by = null
-		if(tier_one_closed_by == LOOT_GOBLIN_CLOSED_BY_FIGURES && figure_points < LOOT_GOBLIN_TIER_TWO_INFLUENCE)
-			tier_one_closed_by = null
-		if(!tier_one_closed_by)
-			if(first_found)
-				tier_one_closed_by = LOOT_GOBLIN_CLOSED_BY_LOOT
-			else if(figure_points >= LOOT_GOBLIN_TIER_TWO_INFLUENCE)
-				tier_one_closed_by = LOOT_GOBLIN_CLOSED_BY_FIGURES
-		if(!tier_one_closed_by)
-			influence = figure_points
-		else
-			influence = LOOT_GOBLIN_TIER_TWO_INFLUENCE
-			if(tier_one_closed_by == LOOT_GOBLIN_CLOSED_BY_LOOT)
-				lair_loot += list(list("name" = first_found.declent_ru(NOMINATIVE), "value" = LOOT_GOBLIN_LOOT_INFLUENCE))
-			else
-				figure_points -= LOOT_GOBLIN_TIER_TWO_INFLUENCE
-			if(second_found)
-				influence += LOOT_GOBLIN_LOOT_INFLUENCE
-				lair_loot += list(list("name" = second_found.declent_ru(NOMINATIVE), "value" = LOOT_GOBLIN_LOOT_INFLUENCE))
-			else
-				influence += min(figure_points, LOOT_GOBLIN_TIER_THREE_INFLUENCE - LOOT_GOBLIN_TIER_TWO_INFLUENCE)
-	else
-		tier_one_closed_by = null
+		influence = min(loot_points + figures_in_lair * LOOT_GOBLIN_FIGURE_INFLUENCE, LOOT_GOBLIN_TIER_THREE_INFLUENCE)
 	if(influence >= LOOT_GOBLIN_TIER_THREE_INFLUENCE)
 		influence = min(influence + sacrifices_done * LOOT_GOBLIN_SACRIFICE_INFLUENCE, LOOT_GOBLIN_MAX_INFLUENCE)
 	if(admin_tier)
@@ -635,9 +579,9 @@
 		return
 	switch(goblin.tier)
 		if(1)
-			explanation_text = "Тир 1: принесите в логово [goblin.get_loot_name(goblin.tier_one_loot) || "ценную вещь отдела"] или [LOOT_GOBLIN_TIER_FIGURES] коллекционных фигурок экипажа ([LOOT_GOBLIN_TIER_TWO_INFLUENCE] жадности)."
+			explanation_text = "Тир 1: приносите в своё логово печати отделов, телескопички, дубинки, дробовик бармена и фляжку капитана, чтобы повысить свою жадность ([LOOT_GOBLIN_LOOT_INFLUENCE] за вещь, [LOOT_GOBLIN_FIGURE_INFLUENCE] за фигурку). Нужно [LOOT_GOBLIN_TIER_TWO_INFLUENCE] жадности."
 		if(2)
-			explanation_text = "Тир 2: принесите в логово [goblin.get_loot_name(goblin.tier_two_loot) || "ценную вещь отдела"] или ещё [LOOT_GOBLIN_TIER_FIGURES] коллекционных фигурок экипажа ([LOOT_GOBLIN_TIER_THREE_INFLUENCE] жадности)."
+			explanation_text = "Тир 2: приносите в своё логово печати отделов, телескопички, дубинки, дробовик бармена и фляжку капитана, чтобы повысить свою жадность ([LOOT_GOBLIN_LOOT_INFLUENCE] за вещь, [LOOT_GOBLIN_FIGURE_INFLUENCE] за фигурку). Нужно [LOOT_GOBLIN_TIER_THREE_INFLUENCE] жадности."
 		if(LOOT_GOBLIN_TIER_ANY_SACRIFICE)
 			explanation_text = "Тир 3: принесите в жертву сотрудника станции. Он должен лежать в логове мёртвым или в критическом состоянии."
 		if(LOOT_GOBLIN_TIER_CONTRACT)
@@ -681,3 +625,6 @@
 	if(!owner_turf || owner_turf.get_lumcount() > SHADOW_SPECIES_LIGHT_THRESHOLD)
 		return
 	owner.heal_overall_damage(brute = LOOT_GOBLIN_REGEN_PER_SECOND * seconds_between_ticks, burn = LOOT_GOBLIN_REGEN_PER_SECOND * seconds_between_ticks)
+
+/mob/proc/get_strip_delay_multiplier()
+	return HAS_TRAIT(src, TRAIT_LOOT_GOBLIN) ? 1 / LOOT_GOBLIN_STRIP_SPEED_MULT : 1

@@ -170,3 +170,41 @@
 		return
 	animate(owner, alpha = new_alpha, time = tick_interval)
 	owner.update_appearance(UPDATE_OVERLAYS)
+
+/datum/action/cooldown/spell/pointed/loot_goblin_snap
+	name = "Рассеять внимание"
+	desc = "Щёлкнуть пальцами перед жертвой: она теряет силы и не может подняться 6 секунд. Перезарядка 45 секунд."
+	button_icon = 'icons/mob/actions/actions_mime.dmi'
+	button_icon_state = "finger_guns"
+	check_flags = AB_CHECK_CONSCIOUS | AB_CHECK_INCAPACITATED | AB_CHECK_HANDS_BLOCKED
+	school = SCHOOL_UNSET
+	spell_requirements = NONE
+	antimagic_flags = NONE
+	invocation_type = INVOCATION_NONE
+	sound = null
+	cooldown_time = LOOT_GOBLIN_SNAP_COOLDOWN
+	cast_range = LOOT_GOBLIN_SNAP_RANGE
+	active_msg = "Вы готовите пальцы для щелчка."
+	deactive_msg = "Вы опускаете руку."
+
+/datum/action/cooldown/spell/pointed/loot_goblin_snap/is_valid_target(atom/cast_on)
+	. = ..()
+	if(!.)
+		return
+	if(!iscarbon(cast_on) || cast_on == owner || HAS_TRAIT(cast_on, TRAIT_LOOT_GOBLIN))
+		to_chat(owner, span_warning("Щёлкать нужно перед членом экипажа!"))
+		return FALSE
+	if(!(cast_on in view(cast_range, owner)))
+		to_chat(owner, span_warning("Жертва вне поля зрения!"))
+		return FALSE
+
+/datum/action/cooldown/spell/pointed/loot_goblin_snap/cast(mob/living/carbon/cast_on)
+	. = ..()
+	owner.emote("snap")
+	cast_on.visible_message(
+		span_danger("[capitalize(cast_on.declent_ru(NOMINATIVE))] отвлекается на щелчок и валится с ног!"),
+		span_userdanger("Резкий щелчок сбивает вас с толку, и ноги подкашиваются!"),
+	)
+	cast_on.adjust_stamina_loss(LOOT_GOBLIN_SNAP_STAMINA)
+	cast_on.Knockdown(LOOT_GOBLIN_SNAP_KNOCKDOWN)
+	log_combat(owner, cast_on, "snapped down with loot goblin Distract")
